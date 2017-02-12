@@ -1,0 +1,108 @@
+#Reproducible Research Week 2 Project
+
+
+=======================================
+
+##First, load the data and necessary packages.
+
+```{r}
+library(ggplot2)
+library(plyr)
+data <- read.csv("activity.csv")
+```
+
+##Processing the data
+```{r}
+data$day <- weekdays(as.Date(data$date))
+data$DateTime <- as.POSIXct(data$date, format="%Y-%m-%d")
+
+#pulling data without NAs
+cleandata <- data[!is.na(data$steps),]
+```
+
+##What is mean total number of steps taken per day?
+### -Calculate total number of steps per day  
+### - Plot a histogram of total number of steps taken each day  
+### - Calculate the mean and the median
+```{r}
+#calculating total number of steps per day
+sumTable <- aggregate(data$steps ~ data$date, FUN=sum,) 
+colnames(sumTable)<- c("Date", "Steps")
+
+#histogram of total number of steps per day
+hist(sumTable$Steps, breaks=5, xlab="Steps", main="Total Steps per Day")
+
+#mean and median total steps per day
+mean(sumTable$Steps)
+median(sumTable$Steps)
+```
+
+##What is the average daily activity pattern?
+### - Time series plot of 5-minute interval (x-axis) and average number of steps taken, averaged across all days (y-axis)
+### - Which 5 min interval, on avg across all the days, contains the maximum number of steps?
+```{r}
+library(plyr)
+library(ggplot2)
+
+#pulling data without NAs
+cleandata <- data[!is.na(data$steps),]
+
+#average number of steps per five-minute interval
+intervalTable <- ddply(cleandata, .(interval), summarize, Avg = mean(steps))
+
+#time-series plot of average steps per interval
+ggplot(intervalTable, aes(x=interval, y=Avg), xlab = "Interval", ylab = "Average number of steps") + geom_line() + xlab("Interval") + ylab("Average number of steps") + ggtitle("Average number of steps per interval")
+
+#maximum steps by interval
+maxSteps <- max(intervalTable$Avg)
+
+#which interval with max avg number of steps
+intervalTable[intervalTable==maxSteps,1]
+```
+
+##Imputing missing values
+### - Calculate and report total number of missing values in the dataset
+### - Fill in the missing values. In this case, filled in mean values for that five-minute interval based on day of the week
+### - Creat new data set that is the original data set but with missing data filled in
+### - histogram of the total number of steps taken each day.  Calculate mean and median total nubmer of steps taken per day.
+```{r}
+missingvalues <- is.na(data$steps)
+table(missingvalues)
+
+avgTable <- ddply(cleandata, .(interval, day), summarize, Avg = mean(steps))
+
+#create data set with all NAs for substitution
+nadata <- data[is.na(data$steps),]
+
+#merge NA data with average weekday interval for substitution
+newdata1 <- merge(nadata, avgTable, by=c("interval", "day"))
+
+#Reorder newly substituted data in the same format as original clean data set
+newdata2 <- newdata1[,c(6,4,1,2,5)]
+colnames(newdata2) <- c("steps", "date","interval","day", "DateTime")
+#Merge NA averages and non NA data together
+mergeData <- rbind(cleandata, newdata2)
+
+sumTable2 <- aggregate(mergeData$steps ~ mergeData$date, FUN = sum,)
+colnames(sumTable2) <- c("Date", "Steps")
+
+hist(sumTable2$Steps, breaks=5, xlab="Steps", main = "Total Steps per Day")
+
+mean(sumTable2$Steps)
+median(sumTable2$Steps)
+```
+##Are there differences in activity patterns between weekdays and weekends?
+### - Create new factor variable in the dataset with two levels - "weekday" and "weekend", indicating whether a given date is a weekday or weekend
+### - Make panel plot containing a time series plot of five-minute interval (x-axis) and the average number of steps taken, average across all weekday days or weekend days (y-axis).
+```{r}
+#categorize based on days of week
+mergeData$DayCategory <- ifelse(mergeData$day %in% c("Saturday", "Sunday"), "Weekend", "Weekday")
+
+library(lattice)
+
+#summarize data by interval and type of day
+intervalTable2 <- ddply(mergeData, .(interval, DayCategory), summarize, Avg = mean(steps))
+
+#plot data in a panel plot
+xyplot(Avg~interval|DayCategory, data=intervalTable2, type="1", layout=c(1,2), main="Average steps per interval based on type of day", ylab="Average number of steps", xlab="Interval")
+```
